@@ -11,8 +11,15 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
 from eval.golden_cases import ALL_CASES, GoldenCase
+from hypothesa import config
 from hypothesa.summarize import summarize_open_answer
+
+BASELINE_PATH = Path(__file__).with_name("baseline.json")
 
 
 def _check_case(case: GoldenCase) -> dict:
@@ -67,6 +74,21 @@ def main() -> None:
     print(f"format_valid_rate:  {format_valid}/{n} = {format_valid / n:.0%}")
     print(f"passed:             {passed}/{n} = {passed / n:.0%}")
     print(f"hallucination_rate: {hallucinated}/{n} = {hallucinated / n:.0%}")
+
+    baseline = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "generator_model": config.LLM_MODEL,
+        "judge_model": config.JUDGE_MODEL,
+        "n_cases": n,
+        "format_valid_rate": format_valid / n,
+        "passed_rate": passed / n,
+        "hallucination_rate": hallucinated / n,
+        "cases": results,
+    }
+    BASELINE_PATH.write_text(
+        json.dumps(baseline, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"\nbaseline → {BASELINE_PATH}")
 
 
 if __name__ == "__main__":
