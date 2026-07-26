@@ -1,0 +1,171 @@
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    environment:
+      POSTGRES_DB: hypothesa
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hypothesa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:0.30.9
+    environment:
+      OLLAMA_FLASH_ATTENTION: ${OLLAMA_FLASH_ATTENTION:-1}
+      OLLAMA_KV_CACHE_TYPE: ${OLLAMA_KV_CACHE_TYPE:-q8_0}
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-4096}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-10m}
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    gpus: all
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ollama-init:
+    image: ollama/ollama:0.30.9
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama pull ${LLM_MODEL:-qwen2.5:14b-instruct-q4_K_M} &&
+        ollama pull ${JUDGE_MODEL:-llama3.1:8b}
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      OLLAMA_HOST: http://ollama:11434
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      PARTICIPANT_SALT: ${PARTICIPANT_SALT:?PARTICIPANT_SALT is required}
+      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
+      ADAPTIVE_SHARE: ${ADAPTIVE_SHARE:-0.5}
+      BOT_MAX_CONCURRENT_LLM_REQUESTS: ${BOT_MAX_CONCURRENT_LLM_REQUESTS:-1}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:14b-instruct-q4_K_M}
+      JUDGE_MODEL: ${JUDGE_MODEL:-llama3.1:8b}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ollama-init:
+        condition: service_completed_successfully
+
+  batch:
+    build: .
+    profiles: ["tools"]
+    command: ["python", "run_batch_summarization.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:14b-instruct-q4_K_M}
+      JUDGE_MODEL: ${JUDGE_MODEL:-llama3.1:8b}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ollama-init:
+        condition: service_completed_successfully
+
+  topics:
+    build:
+      context: .
+      args:
+        REQUIREMENTS_FILE: requirements-ml.txt
+    profiles: ["tools"]
+    command: ["python", "run_topic_modeling.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  metrics:
+    build: .
+    profiles: ["tools"]
+    command: ["python", "run_experiment_report.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  retention:
+    build: .
+    profiles: ["tools"]
+    command: ["python", "run_data_retention.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-90}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    build:
+      context: .
+      args:
+        REQUIREMENTS_FILE: requirements-ml.txt
+    profiles: ["automation"]
+    restart: unless-stopped
+    command: ["python", "run_scheduler.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:14b-instruct-q4_K_M}
+      JUDGE_MODEL: ${JUDGE_MODEL:-llama3.1:8b}
+      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cpu}
+      TOPIC_RANDOM_STATE: ${TOPIC_RANDOM_STATE:-42}
+      TOPIC_MIN_SIZE: ${TOPIC_MIN_SIZE:-5}
+      TOPIC_SIMILARITY_THRESHOLD: ${TOPIC_SIMILARITY_THRESHOLD:-0.82}
+      TOPIC_MIN_MENTIONS: ${TOPIC_MIN_MENTIONS:-2}
+      TOPIC_MIN_PREVALENCE: ${TOPIC_MIN_PREVALENCE:-0.05}
+      TOPIC_QUESTION_COUNT: ${TOPIC_QUESTION_COUNT:-2}
+      TOPIC_MIN_VALID_INTERVIEWS: ${TOPIC_MIN_VALID_INTERVIEWS:-50}
+      TOPIC_REFRESH_EVERY: ${TOPIC_REFRESH_EVERY:-10}
+      TOPIC_COOLDOWN_HOURS: ${TOPIC_COOLDOWN_HOURS:-24}
+      AUTOMATION_INTERVAL_MINUTES: ${AUTOMATION_INTERVAL_MINUTES:-30}
+      AUTOMATION_BATCH_LIMIT: ${AUTOMATION_BATCH_LIMIT:-500}
+      AUTOMATION_TIMEZONE: ${AUTOMATION_TIMEZONE:-Europe/Moscow}
+      AUTOMATION_WINDOW_START_HOUR: ${AUTOMATION_WINDOW_START_HOUR:-2}
+      AUTOMATION_WINDOW_HOURS: ${AUTOMATION_WINDOW_HOURS:-3}
+      AUTOMATION_REQUIRE_NO_ACTIVE_SESSIONS: ${AUTOMATION_REQUIRE_NO_ACTIVE_SESSIONS:-true}
+      AUTOMATION_ACTIVE_GRACE_MINUTES: ${AUTOMATION_ACTIVE_GRACE_MINUTES:-30}
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-90}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ollama-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  ollama-data:

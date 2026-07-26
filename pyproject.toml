@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "integration: requires external infrastructure such as PostgreSQL",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Учебные ноутбуки сначала при необходимости устанавливают зависимости,
+# поэтому их импорты намеренно находятся не в начале ячейки/экспорта.
+"*.ipynb" = ["E402"]
+"hw_*.py" = ["E402"]

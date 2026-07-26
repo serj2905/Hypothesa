@@ -1,0 +1,381 @@
+{
+  "timestamp": "2026-07-26T16:41:46.477646+00:00",
+  "generator_model": "qwen2.5:14b-instruct-q4_K_M",
+  "judge_model": "llama3.1:8b",
+  "n_cases": 25,
+  "metrics": {
+    "format_valid_rate": 1,
+    "passed_rate": 0.96,
+    "faithfulness_rate": 1,
+    "hallucination_rate": 0,
+    "empty_correct_rate": 1,
+    "content_non_empty_rate": 1,
+    "mean_concept_recall": 0.9587719298245614,
+    "mean_concept_precision": 0.8005847953216374
+  },
+  "cases": [
+    {
+      "name": "python_hallucination_negatives",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Клиентоориентированность",
+        "Перерасчет бонусов спасибо",
+        "Количество офисов"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "python_hallucination_positives",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Скорость",
+        "удобство"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "stickers_vk_python_hallucination",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "стикеры в вк",
+        "набор стикеров от сбербанка в социальной сети \"Вконтакте\""
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "phone_transfer_translator_hallucination",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "перевод по телефону",
+        "комиссия за перевод"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "empty_nichego",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [],
+      "concept_recall": null,
+      "concept_precision": null,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "empty_vse_nravitsya",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [],
+      "concept_recall": null,
+      "concept_precision": null,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "empty_vse",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [],
+      "concept_recall": null,
+      "concept_precision": null,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "empty_vse_ustraivaet",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [],
+      "concept_recall": null,
+      "concept_precision": null,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "empty_net_narekaniy",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [],
+      "concept_recall": null,
+      "concept_precision": null,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "empty_ne_znau_ne_polzovalas",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [],
+      "concept_recall": null,
+      "concept_precision": null,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "zhkh_commission",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "комиссия при оплате ЖКХ",
+        "каждый месяц"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.5,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "app_and_queues",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Отсутствие нормального мобильного приложения",
+        "Отсутствие приложения",
+        "Длинные очереди в отделениях",
+        "Качество, надежность услуг"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "transfer_fee_limit",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "снятие денег за переводы внутри Сбербанка",
+        "лимит от 50"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "missing_self_transfer_button",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "нет кнопки \"перевести себе\" в другой банк",
+        "нажимаю больше кнопок в вашем"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.5,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "spam_sms",
+      "format_valid": true,
+      "faithful": true,
+      "passed": false,
+      "items": [
+        "спам смс",
+        "надоедают",
+        "об операциях"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.3333333333333333,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "spam_calls",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Спам-звонки",
+        "Еженедельно"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.5,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "gov_payment_commission_competitor",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "комиссия за оплату гос учреждений",
+        "отсутствие комиссии в Данил банках для оплаты ЖКХ, садик и тд"
+      ],
+      "concept_recall": 0.6666666666666666,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "office_hours_closure",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Закрытие офисов в 18:00",
+        "необходимость отпрашиваться с работы для посещения банка",
+        "невозможность решения некоторых вопросов через онлайн-сервисы банка",
+        "работа только одного отделения в выходные дни",
+        "возможность выполнить многие операции через онлайн-сервис Сбербанка",
+        "персонал, работающий в офисах банка"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.8333333333333334,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "mortgage_rate_and_numeric_limit",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Высокие ипотечные ставки",
+        "Ограничение переводов без комиссий",
+        "Переводы без комиссий до 50000 тысяч",
+        "Не могу отследить когда уже превысил лимит",
+        "Я не пользуюсь другими услугами, только карта мир"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.8,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "deposits_cashback_long_emoji",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Мало вариантов вкладов",
+        "Кэшбэк Сберспасибо слишком заморочен и бесполезен",
+        "Вклад с пополнением и снятием имеет несколько больший процент, но стартовая сумма больше и снятие отменено",
+        "Нет интереса к вкладам из-за низких процентов",
+        "Кэшбэк слишком ограничивает траты",
+        "Лень возиться с кэшбэком",
+        "Проще переложить деньги на карту другого банка, где кэшбэк в рублях",
+        "Пару акций лежат на Сбербанке, но это символически и неудобно прыгать по разным банкам",
+        "Разочарование из-за удобства использования"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.7777777777777778,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "app_convenience_long_emoji",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "удобство приложения",
+        "интерфейс",
+        "запоминание последних контактов кому отправляла средства, даже если это другой банк",
+        "нахождение камеры QR-кода на главной странице",
+        "легкость отслеживания трат без необходимости в поиске внутри приложения",
+        "анализ финансов"
+      ],
+      "concept_recall": 0.8,
+      "concept_precision": 0.8333333333333334,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "fast_no_ads_many_atms",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Быстро",
+        "без лишней рекламы",
+        "Много банкоматов",
+        "Чтобы все они [банкоматы] имели возможность снимать и пополнять",
+        "в них были деньги",
+        "размен"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.6666666666666666,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "convenient_app_view_cards",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "Удобный интерфейс приложения",
+        "Удобно смотреть все свои карты",
+        "совершать переводы"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 1.0,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "self_employed_tax_glitch_occasional",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "система для самозанятых подвисает",
+        "невозможно оплатить налог из приложения Сбера",
+        "проблемы"
+      ],
+      "concept_recall": 0.75,
+      "concept_precision": 0.6666666666666666,
+      "has_banned": false,
+      "error": null
+    },
+    {
+      "name": "salary_perks_deposits_investment",
+      "format_valid": true,
+      "faithful": true,
+      "passed": true,
+      "items": [
+        "доступность",
+        "наличие \"спасибо\"",
+        "особые предложения для зарплатных клиентов",
+        "вклады с хорошим процентом",
+        "наличие площадки для инвестиций"
+      ],
+      "concept_recall": 1.0,
+      "concept_precision": 0.8,
+      "has_banned": false,
+      "error": null
+    }
+  ]
+}

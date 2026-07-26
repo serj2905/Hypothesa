@@ -58,3 +58,25 @@ class FaithfulnessVerdict(BaseModel):
         default_factory=list,
         description="Элементы суммаризации, которых нет в исходном ответе (галлюцинации).",
     )
+
+
+class InterviewTurnDecision(BaseModel):
+    """Решение генератора: нужен ли ещё один уточняющий вопрос по открытому вопросу.
+
+    Используется в hypothesa/interview.py вместо того, чтобы модель сама решала,
+    когда переходить к следующему вопросу текстом — переход делает код.
+    """
+
+    has_more_to_ask: bool = Field(
+        description=(
+            "false, если ответ респондента — отказ, пустой ('нет', 'все устраивает') "
+            "или уже исчерпывающий и уточнять по существу нечего."
+        )
+    )
+    followup_question: str | None = Field(
+        default=None,
+        description=(
+            "Короткий уточняющий вопрос по конкретной детали из ответа. "
+            "null, если has_more_to_ask=false."
+        ),
+    )

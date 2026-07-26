@@ -80,7 +80,11 @@ def main() -> None:
 
     print("\n=== AGE (user_ans_1) ===")
     ages = [_to_age(x) for x in df["user_ans_1"]]
-    non_numeric = [str(x) for x, a in zip(df["user_ans_1"], ages) if a is None and not pd.isna(x)]
+    non_numeric = [
+        str(x)
+        for x, a in zip(df["user_ans_1"], ages, strict=True)
+        if a is None and not pd.isna(x)
+    ]
     valid = [a for a in ages if a is not None]
     print("non-numeric cells:", non_numeric)
     print(f"n={len(valid)} min={min(valid)} max={max(valid)} "
