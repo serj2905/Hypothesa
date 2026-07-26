@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -78,5 +80,16 @@ class InterviewTurnDecision(BaseModel):
         description=(
             "Короткий уточняющий вопрос по конкретной детали из ответа. "
             "null, если has_more_to_ask=false."
+        ),
+    )
+    followup_reason: Literal[
+        "too_short",
+        "ambiguous",
+        "missing_context",
+        "clarification",
+    ] | None = Field(
+        default=None,
+        description=(
+            "Причина уточнения для аналитики. null, если has_more_to_ask=false."
         ),
     )

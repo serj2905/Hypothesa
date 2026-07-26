@@ -463,7 +463,16 @@ class Storage:
         if session.completed_at is None:
             raise StorageError("У завершённой сессии отсутствует completed_at.")
         dumped = result.model_dump(mode="json")
-        faithful = all(answer["faithful"] for answer in dumped["open_answers"].values())
+        # Валидность корпуса discovery определяется спонтанным слоем. Ошибка только
+        # в enriched-summary не должна выбрасывать честный первоначальный ответ.
+        faithful = all(
+            (
+                answer.get("spontaneous_faithful")
+                if answer.get("spontaneous_faithful") is not None
+                else answer["faithful"]
+            )
+            for answer in dumped["open_answers"].values()
+        )
         completed = pg_insert(completed_interviews).values(
             interview_id=session.interview_id,
             user_id=user_id,
@@ -561,9 +570,17 @@ class Storage:
             for question_id, answer in row.open_answers.items():
                 if int(question_id) not in discovery_question_ids:
                     continue
-                if not answer.get("faithful", False):
+                spontaneous_faithful = answer.get("spontaneous_faithful")
+                if spontaneous_faithful is None:
+                    spontaneous_faithful = answer.get("faithful", False)
+                if not spontaneous_faithful:
                     continue
-                for item_index, text in enumerate(answer["summary"].get("items", [])):
+                spontaneous_summary = (
+                    answer.get("spontaneous_summary") or answer["summary"]
+                )
+                for item_index, text in enumerate(
+                    spontaneous_summary.get("items", [])
+                ):
                     safe_text = redact_pii(str(text))
                     normalized = safe_text.lower()
                     document_id = uuid5(

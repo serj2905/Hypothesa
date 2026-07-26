@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import config
 from .interview import InterviewSession
@@ -27,18 +27,27 @@ from .schemas import FaithfulnessVerdict, OpenAnswer
 
 
 class OpenAnswerResult(BaseModel):
-    """Суммаризация одного открытого вопроса вместе с сырым ответом и вердиктом судьи."""
+    """Спонтанная и обогащённая проекции одного открытого ответа."""
 
     raw_answer: str
+    initial_answer: str | None = None
+    followup_answers: list[str] = Field(default_factory=list)
+    # `summary` — обогащённый слой для описания причин и примеров.
     summary: OpenAnswer
+    # Только этот слой используется для prevalence/rating новых тем.
+    spontaneous_summary: OpenAnswer | None = None
     faithful: bool
+    spontaneous_faithful: bool | None = None
 
 
 class OpenAnswerDraft(BaseModel):
     """Суммаризация до независимой проверки судьёй."""
 
     raw_answer: str
+    initial_answer: str | None = None
+    followup_answers: list[str] = Field(default_factory=list)
     summary: OpenAnswer
+    spontaneous_summary: OpenAnswer | None = None
 
 
 class DraftInterview(BaseModel):
@@ -294,16 +303,25 @@ def generate_session_draft(
             elif question.spec.kind == "city":
                 city = question.answer
             else:
-                summary = generator.structured(
-                    OpenAnswer,
-                    [
-                        {"role": "system", "content": _SUMMARIZE_SYSTEM},
-                        {"role": "user", "content": f"<answer>{question.answer}</answer>"},
-                    ],
+                initial_answer = question.initial_answer or question.answer
+                followup_answers = [
+                    turn.answer for turn in question.followups if turn.answer
+                ]
+                spontaneous_summary = generate_open_answer(
+                    initial_answer,
+                    generator,
+                )
+                summary = (
+                    generate_open_answer(question.answer, generator)
+                    if followup_answers
+                    else spontaneous_summary
                 )
                 open_answers[question.spec.id] = OpenAnswerDraft(
                     raw_answer=question.answer,
+                    initial_answer=initial_answer,
+                    followup_answers=followup_answers,
                     summary=summary,
+                    spontaneous_summary=spontaneous_summary,
                 )
         return DraftInterview(age=age, city=city, open_answers=open_answers)
     finally:
@@ -321,11 +339,26 @@ def judge_session_draft(
     open_answers: dict[int, OpenAnswerResult] = {}
     try:
         for question_id, answer in draft.open_answers.items():
-            verdict = judge_faithfulness(answer.raw_answer, answer.summary, judge)
+            spontaneous_summary = answer.spontaneous_summary or answer.summary
+            initial_answer = answer.initial_answer or answer.raw_answer
+            spontaneous_verdict = judge_faithfulness(
+                initial_answer,
+                spontaneous_summary,
+                judge,
+            )
+            verdict = (
+                judge_faithfulness(answer.raw_answer, answer.summary, judge)
+                if answer.followup_answers
+                else spontaneous_verdict
+            )
             open_answers[question_id] = OpenAnswerResult(
                 raw_answer=answer.raw_answer,
+                initial_answer=initial_answer,
+                followup_answers=answer.followup_answers,
                 summary=answer.summary,
+                spontaneous_summary=spontaneous_summary,
                 faithful=verdict.faithful,
+                spontaneous_faithful=spontaneous_verdict.faithful,
             )
         return CompletedInterview(
             age=draft.age,

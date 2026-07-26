@@ -27,6 +27,10 @@ class VariantMetrics:
     completion_ci95: tuple[float, float]
     median_duration_seconds: float | None
     average_followups: float
+    followup_session_rate: float
+    followup_answer_rate: float
+    average_initial_answer_characters: float
+    average_followup_answer_characters: float
     average_question_coverage: float
 
 
@@ -66,6 +70,32 @@ def _variant_metrics(records: list[ExperimentRecord]) -> VariantMetrics:
         sum(event.kind == "followup_asked" for event in record.session.events)
         for record in records
     ]
+    open_questions = [
+        question
+        for record in records
+        for question in record.session.questions
+        if question.spec.kind == "open"
+    ]
+    followup_turns = [
+        turn for question in open_questions for turn in question.followups
+    ]
+    answered_followups = [
+        turn for turn in followup_turns if turn.answer is not None
+    ]
+    initial_lengths = [
+        len(question.initial_answer)
+        for question in open_questions
+        if question.initial_answer is not None
+    ]
+    followup_lengths = [
+        len(turn.answer)
+        for turn in answered_followups
+        if turn.answer is not None
+    ]
+    sessions_with_followup = sum(
+        any(question.followups for question in record.session.questions)
+        for record in records
+    )
     coverages = []
     for record in records:
         completed_ids = {
@@ -84,6 +114,20 @@ def _variant_metrics(records: list[ExperimentRecord]) -> VariantMetrics:
         completion_ci95=_wilson_interval(len(completed_records), started),
         median_duration_seconds=median(durations) if durations else None,
         average_followups=mean(followups) if followups else 0.0,
+        followup_session_rate=(
+            sessions_with_followup / started if started else 0.0
+        ),
+        followup_answer_rate=(
+            len(answered_followups) / len(followup_turns)
+            if followup_turns
+            else 0.0
+        ),
+        average_initial_answer_characters=(
+            mean(initial_lengths) if initial_lengths else 0.0
+        ),
+        average_followup_answer_characters=(
+            mean(followup_lengths) if followup_lengths else 0.0
+        ),
         average_question_coverage=mean(coverages) if coverages else 0.0,
     )
 
@@ -122,7 +166,7 @@ def build_experiment_report(
         reason = "Достигнут минимальный размер обеих групп; можно проводить продуктовый разбор."
     else:
         reason = (
-            f"Нужно ≥{minimum_total} интервью и ≥{minimum_per_variant} в каждой группе; "
+            f"Нужно >={minimum_total} интервью и >={minimum_per_variant} в каждой группе; "
             f"сейчас total={len(records)}, control={control.started}, adaptive={adaptive.started}."
         )
     return ExperimentReport(

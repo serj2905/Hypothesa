@@ -1,5 +1,18 @@
+from datetime import UTC, datetime
+
+from hypothesa.interview import (
+    FollowupTurn,
+    InterviewSession,
+    QuestionSpec,
+    QuestionState,
+)
 from hypothesa.schemas import FaithfulnessVerdict, OpenAnswer
-from hypothesa.summarize import generate_open_answer, judge_faithfulness
+from hypothesa.summarize import (
+    generate_open_answer,
+    generate_session_draft,
+    judge_faithfulness,
+    judge_session_draft,
+)
 
 
 class Judge:
@@ -107,3 +120,46 @@ def test_trailing_control_replies_are_removed_before_generation() -> None:
     generate_open_answer("Спам-звонки Еженедельно Хз Далее", generator)
 
     assert generator.messages[0][1]["content"] == "<answer>Спам-звонки Еженедельно</answer>"
+
+
+def test_session_summary_separates_spontaneous_and_enriched_layers() -> None:
+    session = InterviewSession(
+        questions=[
+            QuestionState(
+                spec=QuestionSpec(id=1, kind="open", text="Что не нравится?"),
+                initial_answer="Высокая комиссия",
+                followups=[
+                    FollowupTurn(
+                        question="Где именно?",
+                        answer="При оплате ЖКХ",
+                        reason="missing_context",
+                    )
+                ],
+                followups_asked=1,
+                answer="Высокая комиссия При оплате ЖКХ",
+            )
+        ],
+        current_index=1,
+        finished=True,
+        completed_at=datetime.now(UTC),
+    )
+    generator = Generator(
+        [
+            OpenAnswer(items=["Высокая комиссия"]),
+            OpenAnswer(items=["Высокая комиссия при оплате ЖКХ"]),
+        ]
+    )
+
+    draft = generate_session_draft(session, generator)
+    completed = judge_session_draft(
+        draft,
+        Judge(FaithfulnessVerdict(faithful=True)),
+    )
+    answer = completed.open_answers[1]
+
+    assert answer.initial_answer == "Высокая комиссия"
+    assert answer.followup_answers == ["При оплате ЖКХ"]
+    assert answer.spontaneous_summary == OpenAnswer(items=["Высокая комиссия"])
+    assert answer.summary == OpenAnswer(items=["Высокая комиссия при оплате ЖКХ"])
+    assert answer.spontaneous_faithful
+    assert answer.faithful

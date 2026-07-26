@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import delete, func, select
 
-from hypothesa.interview import QuestionSpec, start_interview
+from hypothesa.interview import FollowupTurn, QuestionSpec, start_interview
 from hypothesa.schemas import OpenAnswer
 from hypothesa.storage import (
     ConcurrentSessionUpdate,
@@ -49,7 +49,16 @@ def test_optimistic_lock_and_idempotent_finalize(storage: Storage) -> None:
 
     try:
         storage.start_session(user_id, session)
-        session.questions[0].answer = "Ответ"
+        session.questions[0].initial_answer = "Спонтанный ответ"
+        session.questions[0].followups = [
+            FollowupTurn(
+                question="А ещё что-нибудь?",
+                answer="Навязанная новая тема",
+                reason="clarification",
+            )
+        ]
+        session.questions[0].followups_asked = 1
+        session.questions[0].answer = "Спонтанный ответ Навязанная новая тема"
         session.questions[1].answer = "Навязанный темой ответ"
         session.current_index = 2
         session.finished = True
@@ -66,9 +75,15 @@ def test_optimistic_lock_and_idempotent_finalize(storage: Storage) -> None:
             city=None,
             open_answers={
                 1: OpenAnswerResult(
-                    raw_answer="Ответ",
-                    summary=OpenAnswer(items=["Ответ"]),
+                    raw_answer="Спонтанный ответ Навязанная новая тема",
+                    initial_answer="Спонтанный ответ",
+                    followup_answers=["Навязанная новая тема"],
+                    summary=OpenAnswer(
+                        items=["Спонтанный ответ", "Навязанная новая тема"]
+                    ),
+                    spontaneous_summary=OpenAnswer(items=["Спонтанный ответ"]),
                     faithful=True,
+                    spontaneous_faithful=True,
                 ),
                 2: OpenAnswerResult(
                     raw_answer="Навязанный темой ответ",
@@ -89,6 +104,7 @@ def test_optimistic_lock_and_idempotent_finalize(storage: Storage) -> None:
             if document.interview_id == session.interview_id
         ]
         assert [document.question_id for document in documents] == [1]
+        assert [document.text for document in documents] == ["Спонтанный ответ"]
 
         with (
             storage.advisory_lock("integration-lock") as first_lock,

@@ -2,7 +2,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from hypothesa.experiments import assign_variant, pseudonymize_participant
-from hypothesa.interview import QuestionSpec, advance, start_interview
+from hypothesa.interview import FollowupTurn, QuestionSpec, advance, start_interview
 from hypothesa.metrics import ExperimentRecord, build_experiment_report
 
 
@@ -66,3 +66,31 @@ def test_report_counts_participant_only_once() -> None:
     assert report.variants["control"].started == 1
     assert report.variants["adaptive"].started == 1
     assert report.ready_for_decision
+
+
+def test_report_tracks_separate_followup_value_metrics() -> None:
+    record = finished_record("control")
+    state = record.session.questions[0]
+    state.initial_answer = "Короткий ответ"
+    state.answer = "Короткий ответ Конкретный пример"
+    state.followups = [
+        FollowupTurn(
+            question="Приведите пример",
+            answer="Конкретный пример",
+            reason="missing_context",
+        )
+    ]
+    state.followups_asked = 1
+
+    report = build_experiment_report(
+        "survey",
+        [record],
+        minimum_total=1,
+        minimum_per_variant=0,
+    )
+    metrics = report.variants["control"]
+
+    assert metrics.followup_session_rate == 1.0
+    assert metrics.followup_answer_rate == 1.0
+    assert metrics.average_initial_answer_characters == len("Короткий ответ")
+    assert metrics.average_followup_answer_characters == len("Конкретный пример")
