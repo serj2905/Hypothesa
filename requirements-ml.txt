@@ -1,3 +1,0 @@
--r requirements.txt
-bertopic==0.17.4
-sentence-transformers>=5.0,<6

@@ -3,7 +3,7 @@
 Бот отвечает только за live-фазу диалога (interview.py) и знает только про
 генератор (config.LLM_MODEL). Судью (config.JUDGE_MODEL) он не загружает
 никогда — суммаризация завершённых интервью происходит отдельным batch-шагом,
-см. run_batch_summarization.py.
+см. `python -m hypothesa.worker`.
 
 Storage и LLMClient синхронные, aiogram — асинхронный: каждый блокирующий
 вызов оборачивается в asyncio.to_thread(), чтобы медленный ответ модели или

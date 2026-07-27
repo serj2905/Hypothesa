@@ -1,12 +1,10 @@
 
 # Секреты — НЕ коммитим
 .env
-DHA_hackathon/sets.py
 
 # Окружение и кэши
 __pycache__/
 *.pyc
-DHA_hackathon/venv/
 .DS_Store
 **/.DS_Store
 

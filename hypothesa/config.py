@@ -1,7 +1,4 @@
-"""Конфиг из окружения. Секреты и хосты — только через .env, не в коде.
-
-Заменяет хардкод токенов в DHA_hackathon/sets.py.
-"""
+"""Конфиг из окружения. Секреты и хосты — только через .env, не в коде."""
 
 from __future__ import annotations
 
@@ -37,7 +34,7 @@ OLLAMA_HOST: str = _get("OLLAMA_HOST", "http://localhost:11434")
 # Генератор (интервьюер + суммаризатор) — Qwen, live во время опроса.
 LLM_MODEL: str = _get("LLM_MODEL", "qwen2.5:14b-instruct-q4_K_M")
 
-# Судья — ДРУГОЕ семейство (см. sprint_1.md): иначе self-preference bias.
+# Судья — ДРУГОЕ семейство: иначе возникает self-preference bias.
 # Запускается в batch-фазе, после выгрузки генератора из VRAM.
 JUDGE_MODEL: str = _get("JUDGE_MODEL", "llama3.1:8b")
 
@@ -65,6 +62,11 @@ DATA_RETENTION_DAYS: int = int(_get("DATA_RETENTION_DAYS", "90"))
 BOT_MAX_CONCURRENT_LLM_REQUESTS: int = int(
     _get("BOT_MAX_CONCURRENT_LLM_REQUESTS", "1")
 )
+API_MAX_CONCURRENT_LLM_REQUESTS: int = int(
+    _get("API_MAX_CONCURRENT_LLM_REQUESTS", "2")
+)
+WORKER_BATCH_LIMIT: int = int(_get("WORKER_BATCH_LIMIT", "10"))
+WORKER_POLL_SECONDS: float = float(_get("WORKER_POLL_SECONDS", "5"))
 
 # Тематический цикл.
 EMBEDDING_MODEL: str = _get(
@@ -121,6 +123,8 @@ def validation_errors(*, require_bot_secrets: bool = False) -> list[str]:
         ("LLM_TIMEOUT", LLM_TIMEOUT),
         ("DATA_RETENTION_DAYS", DATA_RETENTION_DAYS),
         ("BOT_MAX_CONCURRENT_LLM_REQUESTS", BOT_MAX_CONCURRENT_LLM_REQUESTS),
+        ("API_MAX_CONCURRENT_LLM_REQUESTS", API_MAX_CONCURRENT_LLM_REQUESTS),
+        ("WORKER_BATCH_LIMIT", WORKER_BATCH_LIMIT),
         ("TOPIC_MIN_SIZE", TOPIC_MIN_SIZE),
         ("TOPIC_MIN_MENTIONS", TOPIC_MIN_MENTIONS),
         ("TOPIC_MIN_VALID_INTERVIEWS", TOPIC_MIN_VALID_INTERVIEWS),
@@ -131,6 +135,8 @@ def validation_errors(*, require_bot_secrets: bool = False) -> list[str]:
     ):
         if value < 1:
             errors.append(f"{name} должен быть положительным.")
+    if WORKER_POLL_SECONDS <= 0:
+        errors.append("WORKER_POLL_SECONDS должен быть положительным.")
     if LLM_RETRIES < 0:
         errors.append("LLM_RETRIES не должен быть отрицательным.")
     if not 0 <= TOPIC_SIMILARITY_THRESHOLD <= 1:

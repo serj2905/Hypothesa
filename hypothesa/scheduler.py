@@ -1,4 +1,4 @@
-"""Периодический offline-scheduler для batch и тематического обновления."""
+"""Периодический offline-scheduler для тематического обновления."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from hypothesa import config
-from hypothesa.automation import run_automatic_pipeline_once
-from hypothesa.storage import Storage
+from . import config
+from .automation import run_automatic_pipeline_once
+from .storage import Storage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("hypothesa.scheduler")
@@ -19,9 +19,7 @@ logger = logging.getLogger("hypothesa.scheduler")
 
 def within_maintenance_window(now: datetime) -> bool:
     local = now.astimezone(ZoneInfo(config.AUTOMATION_TIMEZONE))
-    elapsed_hours = (
-        local.hour + local.minute / 60 - config.AUTOMATION_WINDOW_START_HOUR
-    ) % 24
+    elapsed_hours = (local.hour + local.minute / 60 - config.AUTOMATION_WINDOW_START_HOUR) % 24
     return elapsed_hours < config.AUTOMATION_WINDOW_HOURS
 
 

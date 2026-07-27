@@ -1,12 +1,22 @@
-# Runtime, Python 3.11/3.12.
+# Python 3.11/3.12.
+
+# API, Telegram, конфигурация и БД.
 pydantic>=2.10,<3
 httpx>=0.27,<1
 python-dotenv>=1.0,<2
+tzdata>=2025.2; platform_system == "Windows"
 sqlalchemy>=2.0,<3
 alembic>=1.17,<2
 psycopg[binary]>=3.1,<4
 aiogram>=3.0,<4
+fastapi>=0.116,<1
+uvicorn>=0.35,<1
 
-# Воспроизводимый EDA/eval.
-pandas>=2.2,<3
+# Тематическое моделирование.
 numpy>=2.0,<3
+bertopic==0.17.4
+sentence-transformers>=5.0,<6
+
+# Тесты и статический анализ.
+pytest>=9.0,<10
+ruff>=0.12,<1

@@ -354,6 +354,25 @@ class Storage:
             row = conn.execute(stmt).first()
         return InterviewSession.model_validate(row.session) if row else None
 
+    def load_session(
+        self,
+        user_id: int,
+        interview_id: UUID,
+    ) -> tuple[InterviewSession, str] | None:
+        """Загрузить принадлежащую участнику сессию независимо от её статуса."""
+        stmt = select(
+            interview_sessions.c.session,
+            interview_sessions.c.status,
+        ).where(
+            interview_sessions.c.interview_id == interview_id,
+            interview_sessions.c.user_id == user_id,
+        )
+        with self.engine.connect() as conn:
+            row = conn.execute(stmt).first()
+        if row is None:
+            return None
+        return InterviewSession.model_validate(row.session), str(row.status)
+
     def save_session(self, user_id: int, session: InterviewSession) -> None:
         """Сохранить только ожидаемую ревизию, защищая ответы от lost update."""
         next_revision = session.revision + 1
