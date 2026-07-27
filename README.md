@@ -6,26 +6,6 @@ Hypothesa проводит короткие проблемные интервь�
 структурированные наблюдения. Из накопленных ответов сервис выделяет темы и
 использует их в следующих версиях анкеты.
 
-Это учебный MVP проекта «Мичер», подготовленный для домашнего задания № 8
-«Упаковка MVP». [Запись занятия и разбор референсного
-проекта](https://www.youtube.com/watch?v=P9SG3zvTS4M).
-
-## Что можно показать на защите
-
-После запуска откройте Telegram-бота и пройдите обычный пользовательский
-сценарий:
-
-1. Отправить `/start` и дать согласие на обработку обезличенных ответов.
-2. Ответить на вопросы о возрасте, городе, плюсах и минусах сервиса.
-3. Получить уточняющий вопрос, если первоначальный ответ недостаточно подробный.
-4. Завершить интервью. Оно попадёт в очередь фоновой суммаризации.
-5. При желании удалить свои ответы командой `/delete_data`.
-
-Отдельно можно показать REST-контур. Его интерактивная документация находится на
-[http://localhost:8000/api/docs](http://localhost:8000/api/docs), проверка
-готовности сервиса — на
-[http://localhost:8000/health](http://localhost:8000/health).
-
 ## Как закрыты критерии задания
 
 | Критерий | Что сделано |
@@ -116,106 +96,24 @@ docker compose ps
 
 ## Архитектура
 
-```mermaid
-flowchart LR
-    Client[Внешний REST-клиент] --> API[FastAPI REST]
-    TG[Telegram-бот] --> Domain[Доменная логика интервью]
-    API --> Domain
-    Domain --> DB[(PostgreSQL)]
-    Domain --> Ollama[Ollama / generator]
-
-    DB -->|pending_summary| W1[Model worker 1]
-    DB -->|pending_summary| W2[Model worker N]
-    W1 --> Ollama
-    W2 --> Ollama
-    W1 --> Judge[Ollama / judge]
-    W2 --> Judge
-    W1 --> DB
-    W2 --> DB
-
-    Scheduler[Offline scheduler] --> DB
-    Scheduler --> Topics[BERTopic]
-    Topics --> DB
-```
-
 Telegram и REST API — два тонких входных адаптера. Они ничего не знают о
 промптах, структуре хранения и тематическом анализе, а вызывают одни и те же
 функции `start_interview()` и `advance()`. Поэтому правила интервью тестируются
-один раз и одинаково работают через оба входа.
+один раз и одинаково работают через оба входа. Состояние хранится в PostgreSQL,
+live-запросы к модели выполняются через Ollama, завершённые интервью разбирают
+фоновые workers, а scheduler обновляет темы и адаптивную анкету.
 
 ## Доменная модель
-
-```mermaid
-erDiagram
-    PARTICIPANT ||--o{ INTERVIEW_SESSION : проходит
-    INTERVIEW_SESSION ||--o{ INTERVIEW_EVENT : порождает
-    INTERVIEW_SESSION ||--o| COMPLETED_INTERVIEW : превращается
-    COMPLETED_INTERVIEW ||--o{ TOPIC_ASSIGNMENT : содержит
-    TOPIC ||--o{ TOPIC_ASSIGNMENT : классифицирует
-    TOPIC_RUN ||--o{ TOPIC : обновляет
-    QUESTIONNAIRE_VERSION }o--o{ TOPIC : использует
-
-    PARTICIPANT {
-        bigint pseudonymous_id
-    }
-    INTERVIEW_SESSION {
-        uuid interview_id
-        bigint user_id
-        string survey_id
-        int survey_version
-        string variant
-        jsonb session
-        string status
-        int revision
-    }
-    INTERVIEW_EVENT {
-        uuid event_id
-        uuid interview_id
-        string kind
-        datetime occurred_at
-        int question_id
-        jsonb details
-    }
-    COMPLETED_INTERVIEW {
-        uuid interview_id
-        int age
-        string city
-        jsonb open_answers
-        bool faithful
-    }
-    TOPIC {
-        uuid topic_id
-        string label
-        jsonb keywords
-        jsonb centroid
-        int rating
-        bool active
-    }
-    TOPIC_ASSIGNMENT {
-        uuid document_id
-        uuid interview_id
-        uuid topic_id
-        string text
-        float probability
-    }
-    QUESTIONNAIRE_VERSION {
-        string survey_id
-        int version
-        jsonb questions
-    }
-    TOPIC_RUN {
-        uuid run_id
-        int document_count
-        jsonb metrics
-        datetime completed_at
-    }
-```
 
 `InterviewSession` хранится как агрегат в JSONB. Это позволяет атомарно
 сохранять текущий вопрос, первоначальный ответ, уточнение и номер ревизии, не
 собирая живой диалог из множества строк. При этом события, финальные результаты,
 темы и версии анкет вынесены в отдельные таблицы, потому что по ним нужны
 выборки и аналитика.
+
+Основные сущности: участник с псевдонимным идентификатором, сессия интервью,
+событие диалога, завершённое интервью, тема, назначение темы на ответ, версия
+анкеты и запуск тематического анализа.
 
 Важные инварианты:
 
