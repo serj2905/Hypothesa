@@ -57,9 +57,43 @@ services:
       ollama:
         condition: service_healthy
 
+  api:
+    build: .
+    restart: unless-stopped
+    command: ["uvicorn", "hypothesa.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
+      OLLAMA_HOST: http://ollama:11434
+      PARTICIPANT_SALT: ${PARTICIPANT_SALT:?PARTICIPANT_SALT is required}
+      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
+      ADAPTIVE_SHARE: ${ADAPTIVE_SHARE:-0.5}
+      API_MAX_CONCURRENT_LLM_REQUESTS: ${API_MAX_CONCURRENT_LLM_REQUESTS:-2}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:14b-instruct-q4_K_M}
+      JUDGE_MODEL: ${JUDGE_MODEL:-llama3.1:8b}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ollama-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   bot:
     build: .
     restart: unless-stopped
+    command: ["python", "bot.py"]
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
       OLLAMA_HOST: http://ollama:11434
@@ -76,65 +110,28 @@ services:
       ollama-init:
         condition: service_completed_successfully
 
-  batch:
+  worker:
     build: .
-    profiles: ["tools"]
-    command: ["python", "run_batch_summarization.py"]
+    restart: unless-stopped
+    command: ["python", "-m", "hypothesa.worker"]
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
       OLLAMA_HOST: http://ollama:11434
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:14b-instruct-q4_K_M}
       JUDGE_MODEL: ${JUDGE_MODEL:-llama3.1:8b}
+      WORKER_BATCH_LIMIT: ${WORKER_BATCH_LIMIT:-10}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-5}
     depends_on:
       migrate:
         condition: service_completed_successfully
       ollama-init:
         condition: service_completed_successfully
 
-  topics:
-    build:
-      context: .
-      args:
-        REQUIREMENTS_FILE: requirements-ml.txt
-    profiles: ["tools"]
-    command: ["python", "run_topic_modeling.py"]
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
-      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
-  metrics:
-    build: .
-    profiles: ["tools"]
-    command: ["python", "run_experiment_report.py"]
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
-      SURVEY_ID: ${SURVEY_ID:-sber-service-quality}
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
-  retention:
-    build: .
-    profiles: ["tools"]
-    command: ["python", "run_data_retention.py"]
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
-      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-90}
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
   scheduler:
-    build:
-      context: .
-      args:
-        REQUIREMENTS_FILE: requirements-ml.txt
+    build: .
     profiles: ["automation"]
     restart: unless-stopped
-    command: ["python", "run_scheduler.py"]
+    command: ["python", "-m", "hypothesa.scheduler"]
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hypothesa
       OLLAMA_HOST: http://ollama:11434
