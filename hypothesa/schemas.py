@@ -1,9 +1,4 @@
-"""Pydantic-схемы ответов — контракт, который убивает классы багов
-нестабильного формата суммаризации (баги 1 и 3 из CLAUDE.md).
-
-Вместо «попросили LLM вернуть Python-список и парсим regex'ом» —
-жёсткая схема, которую модель обязана заполнить через structured output.
-"""
+"""Pydantic-схемы — строгий контракт structured output для ответов LLM."""
 
 from __future__ import annotations
 
@@ -82,14 +77,15 @@ class InterviewTurnDecision(BaseModel):
             "null, если has_more_to_ask=false."
         ),
     )
-    followup_reason: Literal[
-        "too_short",
-        "ambiguous",
-        "missing_context",
-        "clarification",
-    ] | None = Field(
+    followup_reason: (
+        Literal[
+            "too_short",
+            "ambiguous",
+            "missing_context",
+            "clarification",
+        ]
+        | None
+    ) = Field(
         default=None,
-        description=(
-            "Причина уточнения для аналитики. null, если has_more_to_ask=false."
-        ),
+        description=("Причина уточнения для аналитики. null, если has_more_to_ask=false."),
     )

@@ -54,9 +54,7 @@ def concept_precision(case: GoldenCase, items: Iterable[str]) -> float | None:
     if not case.expected_concepts:
         return None
     normalized_concepts = [
-        normalize_text(value)
-        for alternatives in case.expected_concepts
-        for value in alternatives
+        normalize_text(value) for alternatives in case.expected_concepts for value in alternatives
     ]
     normalized_items = [normalize_text(item) for item in items]
     if not normalized_items:
@@ -75,9 +73,7 @@ def score_case(
 ) -> CaseScore:
     """Оценить один валидный structured-output ответ."""
     normalized = normalize_text(" ".join(summary.items))
-    has_banned = any(
-        normalize_text(value) in normalized for value in case.banned_substrings
-    )
+    has_banned = any(normalize_text(value) in normalized for value in case.banned_substrings)
     recall = concept_recall(case, summary.items)
     precision = concept_precision(case, summary.items)
 
@@ -133,12 +129,8 @@ def aggregate_scores(scores: list[CaseScore]) -> dict[str, float]:
         "format_valid_rate": mean(score.format_valid for score in scores),
         "passed_rate": mean(score.passed for score in scores),
         "faithfulness_rate": mean(score.faithful is True for score in scores),
-        "hallucination_rate": mean(
-            score.has_banned or score.faithful is False for score in scores
-        ),
-        "empty_correct_rate": mean(score.passed for score in empty_scores)
-        if empty_scores
-        else 1.0,
+        "hallucination_rate": mean(score.has_banned or score.faithful is False for score in scores),
+        "empty_correct_rate": mean(score.passed for score in empty_scores) if empty_scores else 1.0,
         "content_non_empty_rate": mean(bool(score.items) for score in content_scores)
         if content_scores
         else 1.0,

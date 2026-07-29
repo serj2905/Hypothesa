@@ -1,6 +1,15 @@
 .git
+.github
+.claude
 .env
 .venv
+venv
 __pycache__
-*.pyc
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov
 eval/results
+tests

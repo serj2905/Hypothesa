@@ -71,9 +71,7 @@ def run_checks() -> list[dict[str, str | bool]]:
     try:
         storage.healthcheck()
         revision = _check_migrations(storage)
-        results.append(
-            {"check": "postgresql", "ok": True, "detail": f"OK, revision={revision}"}
-        )
+        results.append({"check": "postgresql", "ok": True, "detail": f"OK, revision={revision}"})
     except Exception as exc:
         results.append({"check": "postgresql", "ok": False, "detail": repr(exc)})
     finally:
@@ -83,13 +81,9 @@ def run_checks() -> list[dict[str, str | bool]]:
         try:
             with LLMClient(model=model, timeout=10, retry_count=0) as client:
                 client.healthcheck()
-            results.append(
-                {"check": f"ollama_{role}", "ok": True, "detail": f"OK, model={model}"}
-            )
+            results.append({"check": f"ollama_{role}", "ok": True, "detail": f"OK, model={model}"})
         except Exception as exc:
-            results.append(
-                {"check": f"ollama_{role}", "ok": False, "detail": repr(exc)}
-            )
+            results.append({"check": f"ollama_{role}", "ok": False, "detail": repr(exc)})
     return results
 
 

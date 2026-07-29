@@ -154,16 +154,11 @@ REST-клиент создаёт случайный UUID участника. П�
 python -m pip install -r requirements.txt
 python -m pytest -q
 python -m ruff check .
+python -m ruff format --check .
 ```
 
-На момент сдачи результат локального прогона:
-
-```text
-41 passed, 1 skipped
-```
-
-Пропущен только PostgreSQL integration test, если не задан
-`TEST_DATABASE_URL`. Полный прогон:
+Без `TEST_DATABASE_URL` пропускается только PostgreSQL integration test.
+Полный прогон:
 
 ```powershell
 docker compose up -d postgres
@@ -175,6 +170,60 @@ python -m pytest -q
 переходы интервью, согласие и отказ, единственное уточнение, structured output
 LLM, retry, псевдонимизация, удаление PII, REST-входы, конкурентное обновление
 сессии, идемпотентная суммаризация и тематический цикл.
+
+## Оценка BERTopic
+
+Быстрая проверка BERTopic на размеченном аспектном smoke-корпусе:
+
+```powershell
+python -m eval.run_topic_eval --quick
+```
+
+Полная сетка параметров UMAP/HDBSCAN для MiniLM и multilingual E5:
+
+```powershell
+python -m eval.run_topic_eval
+```
+
+Отчёт сохраняется в `eval/results/` и сравнивает долю шума, silhouette,
+Adjusted Rand Index и чистоту назначенных кластеров. Разметка smoke-корпуса
+проверяет аспекты обслуживания; она не заменяет ручную оценку тем на реальных
+интервью.
+
+Read-only preview на текущем faithful-корпусе PostgreSQL:
+
+```powershell
+python -m eval.preview_topics
+```
+
+Команда печатает темы, вероятности и репрезентативные примеры, сохраняет JSON в
+`eval/results/`, но не обновляет таблицы тем, назначения или адаптивную анкету.
+
+Рядом с каждой темой выводится распространённость — доля интервью с упоминанием,
+а не доля документов, — с 95% доверительным интервалом Уилсона:
+
+```text
+Темы: 2; шум: 10 (45.5%); покрытие топ-5: 54.5%; silhouette: 0.081
+
+[0] комиссия, перевод, лимит (7 документов; 7 из 22 интервью — 32%, 95% ДИ 16%–53%)
+[1] очередь, отделение (5 документов; 5 из 22 интервью — 23%, 95% ДИ 10%–43%)
+```
+
+Интервалы намеренно показаны рядом: на пилотных выборках они шире расстояния
+между соседними темами, поэтому рейтинг читается как подсказка порядка, а не как
+измерение распространённости. Тот же интервал возвращает `calculate_ratings` в
+поле `prevalence_ci95` для тем реального цикла.
+
+Для локального end-to-end теста можно идемпотентно создать отдельный synthetic
+survey с 50 grounded faithful-интервью:
+
+```powershell
+python -m eval.seed_faithful_interviews --apply
+python -m eval.preview_topics --survey-id sber-service-quality-synthetic-v1
+```
+
+Seed не вызывает LLM и не смешивается с основным survey: raw-ответы и summary
+строятся вместе, а summary-items проверяются на присутствие в исходном ответе.
 
 ## Основные настройки
 
@@ -210,9 +259,11 @@ hypothesa/
 │   ├── topics.py           # тематическое моделирование
 │   ├── automation.py       # условия offline-пересчёта
 │   └── privacy.py          # редактирование PII
+├── eval/                   # golden-eval и оценка тематического моделирования
 ├── migrations/             # миграции Alembic
 ├── tests/                  # unit и integration tests
 ├── bot.py                  # основной интерфейс респондента
 ├── Dockerfile
+├── pyproject.toml           # настройки Pytest и Ruff
 └── compose.yaml
 ```

@@ -42,9 +42,7 @@ JUDGE_MODEL: str = _get("JUDGE_MODEL", "llama3.1:8b")
 LLM_TIMEOUT: int = int(_get("LLM_TIMEOUT", "120"))
 LLM_RETRIES: int = int(_get("LLM_RETRIES", "2"))
 
-# Postgres — состояние интервью и завершённые записи (см. storage.py).
-# Заменяет joblib-файлы в dialogs/ прототипа: снимает гонки при параллельных
-# диалогах и даёт единую точку для будущей аналитики (BERTopic, рейтинг).
+# Postgres — единое хранилище интервью, сводок и тематической аналитики.
 DATABASE_URL: str = _get(
     "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/hypothesa"
 )
@@ -59,12 +57,8 @@ SURVEY_ID: str = _get("SURVEY_ID", "sber-service-quality")
 PARTICIPANT_SALT: str = _get("PARTICIPANT_SALT", "dev-only-change-me")
 ADAPTIVE_SHARE: float = float(_get("ADAPTIVE_SHARE", "0.5"))
 DATA_RETENTION_DAYS: int = int(_get("DATA_RETENTION_DAYS", "90"))
-BOT_MAX_CONCURRENT_LLM_REQUESTS: int = int(
-    _get("BOT_MAX_CONCURRENT_LLM_REQUESTS", "1")
-)
-API_MAX_CONCURRENT_LLM_REQUESTS: int = int(
-    _get("API_MAX_CONCURRENT_LLM_REQUESTS", "2")
-)
+BOT_MAX_CONCURRENT_LLM_REQUESTS: int = int(_get("BOT_MAX_CONCURRENT_LLM_REQUESTS", "1"))
+API_MAX_CONCURRENT_LLM_REQUESTS: int = int(_get("API_MAX_CONCURRENT_LLM_REQUESTS", "2"))
 WORKER_BATCH_LIMIT: int = int(_get("WORKER_BATCH_LIMIT", "10"))
 WORKER_POLL_SECONDS: float = float(_get("WORKER_POLL_SECONDS", "5"))
 
@@ -76,6 +70,9 @@ EMBEDDING_MODEL: str = _get(
 EMBEDDING_DEVICE: str = _get("EMBEDDING_DEVICE", "cpu")
 TOPIC_RANDOM_STATE: int = int(_get("TOPIC_RANDOM_STATE", "42"))
 TOPIC_MIN_SIZE: int = int(_get("TOPIC_MIN_SIZE", "5"))
+TOPIC_UMAP_NEIGHBORS: int = int(_get("TOPIC_UMAP_NEIGHBORS", "10"))
+TOPIC_MIN_SAMPLES: int = int(_get("TOPIC_MIN_SAMPLES", "1"))
+TOPIC_CLUSTER_SELECTION_METHOD: str = _get("TOPIC_CLUSTER_SELECTION_METHOD", "leaf")
 TOPIC_SIMILARITY_THRESHOLD: float = float(_get("TOPIC_SIMILARITY_THRESHOLD", "0.82"))
 TOPIC_MIN_MENTIONS: int = int(_get("TOPIC_MIN_MENTIONS", "2"))
 TOPIC_MIN_PREVALENCE: float = float(_get("TOPIC_MIN_PREVALENCE", "0.05"))
@@ -94,9 +91,7 @@ AUTOMATION_WINDOW_HOURS: int = int(_get("AUTOMATION_WINDOW_HOURS", "3"))
 AUTOMATION_REQUIRE_NO_ACTIVE_SESSIONS: bool = _get_bool(
     "AUTOMATION_REQUIRE_NO_ACTIVE_SESSIONS", True
 )
-AUTOMATION_ACTIVE_GRACE_MINUTES: int = int(
-    _get("AUTOMATION_ACTIVE_GRACE_MINUTES", "30")
-)
+AUTOMATION_ACTIVE_GRACE_MINUTES: int = int(_get("AUTOMATION_ACTIVE_GRACE_MINUTES", "30"))
 
 
 class ConfigurationError(ValueError):
@@ -126,6 +121,8 @@ def validation_errors(*, require_bot_secrets: bool = False) -> list[str]:
         ("API_MAX_CONCURRENT_LLM_REQUESTS", API_MAX_CONCURRENT_LLM_REQUESTS),
         ("WORKER_BATCH_LIMIT", WORKER_BATCH_LIMIT),
         ("TOPIC_MIN_SIZE", TOPIC_MIN_SIZE),
+        ("TOPIC_UMAP_NEIGHBORS", TOPIC_UMAP_NEIGHBORS),
+        ("TOPIC_MIN_SAMPLES", TOPIC_MIN_SAMPLES),
         ("TOPIC_MIN_MENTIONS", TOPIC_MIN_MENTIONS),
         ("TOPIC_MIN_VALID_INTERVIEWS", TOPIC_MIN_VALID_INTERVIEWS),
         ("TOPIC_REFRESH_EVERY", TOPIC_REFRESH_EVERY),
@@ -143,6 +140,8 @@ def validation_errors(*, require_bot_secrets: bool = False) -> list[str]:
         errors.append("TOPIC_SIMILARITY_THRESHOLD должен находиться между 0 и 1.")
     if not 0 <= TOPIC_MIN_PREVALENCE <= 1:
         errors.append("TOPIC_MIN_PREVALENCE должен находиться между 0 и 1.")
+    if TOPIC_CLUSTER_SELECTION_METHOD not in {"eom", "leaf"}:
+        errors.append("TOPIC_CLUSTER_SELECTION_METHOD должен быть eom или leaf.")
     if not 0 <= AUTOMATION_WINDOW_START_HOUR <= 23:
         errors.append("AUTOMATION_WINDOW_START_HOUR должен быть от 0 до 23.")
     if not 1 <= AUTOMATION_WINDOW_HOURS <= 24:

@@ -47,7 +47,13 @@ class ExperimentReport:
         return asdict(self)
 
 
-def _wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float, float]:
+def wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float, float]:
+    """Доверительный интервал доли по Уилсону.
+
+    В отличие от нормального приближения остаётся корректным на малых выборках
+    и у границ 0/1, поэтому им пользуются и completion rate, и распространённость
+    тем (topics.calculate_ratings).
+    """
     if total == 0:
         return (0.0, 0.0)
     rate = successes / total
@@ -67,8 +73,7 @@ def _variant_metrics(records: list[ExperimentRecord]) -> VariantMetrics:
         if record.session.completed_at is not None
     ]
     followups = [
-        sum(event.kind == "followup_asked" for event in record.session.events)
-        for record in records
+        sum(event.kind == "followup_asked" for event in record.session.events) for record in records
     ]
     open_questions = [
         question
@@ -76,25 +81,16 @@ def _variant_metrics(records: list[ExperimentRecord]) -> VariantMetrics:
         for question in record.session.questions
         if question.spec.kind == "open"
     ]
-    followup_turns = [
-        turn for question in open_questions for turn in question.followups
-    ]
-    answered_followups = [
-        turn for turn in followup_turns if turn.answer is not None
-    ]
+    followup_turns = [turn for question in open_questions for turn in question.followups]
+    answered_followups = [turn for turn in followup_turns if turn.answer is not None]
     initial_lengths = [
         len(question.initial_answer)
         for question in open_questions
         if question.initial_answer is not None
     ]
-    followup_lengths = [
-        len(turn.answer)
-        for turn in answered_followups
-        if turn.answer is not None
-    ]
+    followup_lengths = [len(turn.answer) for turn in answered_followups if turn.answer is not None]
     sessions_with_followup = sum(
-        any(question.followups for question in record.session.questions)
-        for record in records
+        any(question.followups for question in record.session.questions) for record in records
     )
     coverages = []
     for record in records:
@@ -111,23 +107,15 @@ def _variant_metrics(records: list[ExperimentRecord]) -> VariantMetrics:
         valid_completed=valid_completed,
         completion_rate=len(completed_records) / started if started else 0.0,
         valid_completion_rate=valid_completed / started if started else 0.0,
-        completion_ci95=_wilson_interval(len(completed_records), started),
+        completion_ci95=wilson_interval(len(completed_records), started),
         median_duration_seconds=median(durations) if durations else None,
         average_followups=mean(followups) if followups else 0.0,
-        followup_session_rate=(
-            sessions_with_followup / started if started else 0.0
-        ),
+        followup_session_rate=(sessions_with_followup / started if started else 0.0),
         followup_answer_rate=(
-            len(answered_followups) / len(followup_turns)
-            if followup_turns
-            else 0.0
+            len(answered_followups) / len(followup_turns) if followup_turns else 0.0
         ),
-        average_initial_answer_characters=(
-            mean(initial_lengths) if initial_lengths else 0.0
-        ),
-        average_followup_answer_characters=(
-            mean(followup_lengths) if followup_lengths else 0.0
-        ),
+        average_initial_answer_characters=(mean(initial_lengths) if initial_lengths else 0.0),
+        average_followup_answer_characters=(mean(followup_lengths) if followup_lengths else 0.0),
         average_question_coverage=mean(coverages) if coverages else 0.0,
     )
 
@@ -176,9 +164,7 @@ def build_experiment_report(
             adaptive.completion_rate - control.completion_rate if both_present else None
         ),
         valid_completion_rate_delta=(
-            adaptive.valid_completion_rate - control.valid_completion_rate
-            if both_present
-            else None
+            adaptive.valid_completion_rate - control.valid_completion_rate if both_present else None
         ),
         ready_for_decision=ready,
         readiness_reason=reason,

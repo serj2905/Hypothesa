@@ -17,6 +17,26 @@ Message = dict[str, str]
 logger = logging.getLogger(__name__)
 
 
+def release_llm_client(client: object, role: str, *, close: bool) -> None:
+    """Best-effort выгрузить модель и при необходимости закрыть HTTP-клиент."""
+    actions = [("выгрузить модель", getattr(client, "unload", None))]
+    if close:
+        actions.append(("закрыть клиент", getattr(client, "close", None)))
+
+    for description, action in actions:
+        if not callable(action):
+            continue
+        try:
+            action()
+        except Exception:
+            logger.warning(
+                "Не удалось %s для роли %s.",
+                description,
+                role,
+                exc_info=True,
+            )
+
+
 @dataclass(frozen=True)
 class LLMCallMetrics:
     total_duration_ns: int | None = None

@@ -91,9 +91,7 @@ def run_automatic_pipeline_once(
 
         active_sessions = storage.active_session_count(
             config.SURVEY_ID,
-            recent_within=timedelta(
-                minutes=config.AUTOMATION_ACTIVE_GRACE_MINUTES
-            ),
+            recent_within=timedelta(minutes=config.AUTOMATION_ACTIVE_GRACE_MINUTES),
         )
         if config.AUTOMATION_REQUIRE_NO_ACTIVE_SESSIONS and active_sessions:
             return AutomationResult(
@@ -140,6 +138,9 @@ def run_automatic_pipeline_once(
             random_state=config.TOPIC_RANDOM_STATE,
             min_topic_size=config.TOPIC_MIN_SIZE,
             device=config.EMBEDDING_DEVICE,
+            umap_n_neighbors=config.TOPIC_UMAP_NEIGHBORS,
+            hdbscan_min_samples=config.TOPIC_MIN_SAMPLES,
+            cluster_selection_method=config.TOPIC_CLUSTER_SELECTION_METHOD,
         )
         try:
             topic_result = run_topic_cycle(

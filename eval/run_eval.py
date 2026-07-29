@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,7 +16,7 @@ from pathlib import Path
 from eval.golden_cases import ALL_CASES, GoldenCase
 from eval.scoring import CaseScore, aggregate_scores, failed_case, score_case
 from hypothesa import config
-from hypothesa.llm import LLMClient
+from hypothesa.llm import LLMClient, release_llm_client
 from hypothesa.schemas import FaithfulnessVerdict, OpenAnswer
 from hypothesa.summarize import (
     generate_open_answer,
@@ -27,7 +26,6 @@ from hypothesa.summarize import (
 EVAL_DIR = Path(__file__).parent
 BASELINE_PATH = EVAL_DIR / "baseline.json"
 RESULTS_DIR = EVAL_DIR / "results"
-logger = logging.getLogger(__name__)
 ClientFactory = Callable[[], LLMClient]
 
 QUALITY_GATES = {
@@ -57,21 +55,6 @@ class _PendingCase:
     error: Exception | None = None
 
 
-def _best_effort_unload(client: object, role: str) -> None:
-    unload = getattr(client, "unload", None)
-    if callable(unload):
-        try:
-            unload()
-        except Exception:
-            logger.warning("Не удалось выгрузить %s из Ollama.", role, exc_info=True)
-
-
-def _close(client: object) -> None:
-    close = getattr(client, "close", None)
-    if callable(close):
-        close()
-
-
 def _generate_phase(items: Sequence[_PendingCase], factory: ClientFactory) -> None:
     generator = factory()
     try:
@@ -85,8 +68,7 @@ def _generate_phase(items: Sequence[_PendingCase], factory: ClientFactory) -> No
             except Exception as exc:  # один кейс не останавливает eval
                 item.error = exc
     finally:
-        _best_effort_unload(generator, "generator")
-        _close(generator)
+        release_llm_client(generator, "generator", close=True)
 
 
 def _judge_phase(items: Sequence[_PendingCase], factory: ClientFactory) -> None:
@@ -104,8 +86,7 @@ def _judge_phase(items: Sequence[_PendingCase], factory: ClientFactory) -> None:
             except Exception as exc:
                 item.error = exc
     finally:
-        _best_effort_unload(judge, "judge")
-        _close(judge)
+        release_llm_client(judge, "judge", close=True)
 
 
 def evaluate_cases(
@@ -115,12 +96,8 @@ def evaluate_cases(
     judge_factory: ClientFactory | None = None,
 ) -> list[CaseScore]:
     """Оценить корпус пакетно, не чередуя модели в VRAM для каждого кейса."""
-    generator_factory = generator_factory or (
-        lambda: LLMClient(model=config.LLM_MODEL)
-    )
-    judge_factory = judge_factory or (
-        lambda: LLMClient(model=config.JUDGE_MODEL)
-    )
+    generator_factory = generator_factory or (lambda: LLMClient(model=config.LLM_MODEL))
+    judge_factory = judge_factory or (lambda: LLMClient(model=config.JUDGE_MODEL))
     pending = [_PendingCase(case=case) for case in cases]
 
     _generate_phase(pending, generator_factory)
@@ -129,9 +106,7 @@ def evaluate_cases(
     retry = [
         item
         for item in pending
-        if item.error is None
-        and item.verdict is not None
-        and not item.verdict.faithful
+        if item.error is None and item.verdict is not None and not item.verdict.faithful
     ]
     if retry:
         for item in retry:
@@ -190,9 +165,7 @@ def check_regressions(report: dict, baseline: dict) -> list[str]:
         delta = current[name] - previous[name]
         regressed = delta > tolerance if name == "hallucination_rate" else delta < -tolerance
         if regressed:
-            failures.append(
-                f"{name}: {previous[name]:.1%} -> {current[name]:.1%}"
-            )
+            failures.append(f"{name}: {previous[name]:.1%} -> {current[name]:.1%}")
     return failures
 
 
@@ -217,9 +190,7 @@ def print_report(scores: list[CaseScore], metrics: dict[str, float]) -> None:
     print("-" * 86)
     for score in scores:
         recall = "—" if score.concept_recall is None else f"{score.concept_recall:.0%}"
-        precision = (
-            "—" if score.concept_precision is None else f"{score.concept_precision:.0%}"
-        )
+        precision = "—" if score.concept_precision is None else f"{score.concept_precision:.0%}"
         print(
             f"{score.name:<38} "
             f"{'ok' if score.format_valid else 'FAIL':<7} "

@@ -2,9 +2,22 @@
 # Секреты — НЕ коммитим
 .env
 
-# Окружение и кэши
+# Локальные настройки инструментов
+.claude/settings.local.json
+.venv/
+venv/
+
+# Кэши, покрытие и артефакты сборки
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
 .DS_Store
 **/.DS_Store
 

@@ -67,8 +67,14 @@ interview_sessions = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
-Index("ix_interview_sessions_user_status", interview_sessions.c.user_id, interview_sessions.c.status)
-Index("ix_interview_sessions_status_updated", interview_sessions.c.status, interview_sessions.c.updated_at)
+Index(
+    "ix_interview_sessions_user_status", interview_sessions.c.user_id, interview_sessions.c.status
+)
+Index(
+    "ix_interview_sessions_status_updated",
+    interview_sessions.c.status,
+    interview_sessions.c.updated_at,
+)
 Index(
     "uq_active_session_per_user_survey",
     interview_sessions.c.user_id,
@@ -92,7 +98,11 @@ interview_events = Table(
     Column("question_id", Integer),
     Column("details", json_type, nullable=False),
 )
-Index("ix_interview_events_interview_time", interview_events.c.interview_id, interview_events.c.occurred_at)
+Index(
+    "ix_interview_events_interview_time",
+    interview_events.c.interview_id,
+    interview_events.c.occurred_at,
+)
 
 completed_interviews = Table(
     "completed_interviews",
@@ -110,7 +120,11 @@ completed_interviews = Table(
     Column("completed_at", DateTime(timezone=True), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
-Index("ix_completed_survey_created", completed_interviews.c.survey_id, completed_interviews.c.created_at)
+Index(
+    "ix_completed_survey_created",
+    completed_interviews.c.survey_id,
+    completed_interviews.c.created_at,
+)
 
 topics = Table(
     "topics",
@@ -141,7 +155,9 @@ topic_assignments = Table(
     Column("probability", Float),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
-Index("ix_topic_assignments_survey_topic", topic_assignments.c.survey_id, topic_assignments.c.topic_id)
+Index(
+    "ix_topic_assignments_survey_topic", topic_assignments.c.survey_id, topic_assignments.c.topic_id
+)
 
 questionnaire_versions = Table(
     "questionnaire_versions",
@@ -215,9 +231,7 @@ class Storage:
         raw = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], "big")
         lock_id = raw if raw < 2**63 else raw - 2**64
         connection = self.engine.connect()
-        acquired = bool(
-            connection.scalar(select(func.pg_try_advisory_lock(lock_id)))
-        )
+        acquired = bool(connection.scalar(select(func.pg_try_advisory_lock(lock_id))))
         try:
             yield acquired
         finally:
@@ -236,15 +250,8 @@ class Storage:
             interview_sessions.c.status == STATUS_ACTIVE,
         ]
         if recent_within is not None:
-            conditions.append(
-                interview_sessions.c.updated_at
-                >= datetime.now(UTC) - recent_within
-            )
-        stmt = (
-            select(func.count())
-            .select_from(interview_sessions)
-            .where(*conditions)
-        )
+            conditions.append(interview_sessions.c.updated_at >= datetime.now(UTC) - recent_within)
+        stmt = select(func.count()).select_from(interview_sessions).where(*conditions)
         with self.engine.connect() as conn:
             return int(conn.scalar(stmt) or 0)
 
@@ -266,18 +273,12 @@ class Storage:
         with self.engine.connect() as conn:
             total_valid = int(
                 conn.scalar(
-                    select(func.count())
-                    .select_from(completed_interviews)
-                    .where(*valid_condition)
+                    select(func.count()).select_from(completed_interviews).where(*valid_condition)
                 )
                 or 0
             )
             last_run = conn.execute(last_run_stmt).first()
-            cutoff = (
-                last_run.data_cutoff_created_at or last_run.completed_at
-                if last_run
-                else None
-            )
+            cutoff = last_run.data_cutoff_created_at or last_run.completed_at if last_run else None
             if cutoff is None:
                 new_valid = total_valid
             else:
@@ -337,7 +338,9 @@ class Storage:
                     "Активное интервью уже существует; используйте replace_active=True."
                 ) from exc
 
-    def load_active_session(self, user_id: int, survey_id: str | None = None) -> InterviewSession | None:
+    def load_active_session(
+        self, user_id: int, survey_id: str | None = None
+    ) -> InterviewSession | None:
         conditions = [
             interview_sessions.c.user_id == user_id,
             interview_sessions.c.status == STATUS_ACTIVE,
@@ -420,9 +423,7 @@ class Storage:
                 details=event.details,
             )
             conn.execute(
-                statement.on_conflict_do_nothing(
-                    index_elements=[interview_events.c.event_id]
-                )
+                statement.on_conflict_do_nothing(index_elements=[interview_events.c.event_id])
             )
 
     def claim_finished_sessions(
@@ -468,9 +469,7 @@ class Storage:
                         updated_at=func.now(),
                     )
                 )
-        return [
-            (row.user_id, InterviewSession.model_validate(row.session)) for row in rows
-        ]
+        return [(row.user_id, InterviewSession.model_validate(row.session)) for row in rows]
 
     def finalize_summary(
         self,
@@ -566,16 +565,20 @@ class Storage:
         """
         from .topics import TopicDocument
 
-        stmt = select(
-            completed_interviews.c.interview_id,
-            completed_interviews.c.open_answers,
-            interview_sessions.c.session,
-        ).select_from(
-            completed_interviews.join(
-                interview_sessions,
-                completed_interviews.c.interview_id == interview_sessions.c.interview_id,
+        stmt = (
+            select(
+                completed_interviews.c.interview_id,
+                completed_interviews.c.open_answers,
+                interview_sessions.c.session,
             )
-        ).where(completed_interviews.c.survey_id == survey_id)
+            .select_from(
+                completed_interviews.join(
+                    interview_sessions,
+                    completed_interviews.c.interview_id == interview_sessions.c.interview_id,
+                )
+            )
+            .where(completed_interviews.c.survey_id == survey_id)
+        )
         documents = []
         with self.engine.connect() as conn:
             rows = conn.execute(stmt).all()
@@ -594,12 +597,8 @@ class Storage:
                     spontaneous_faithful = answer.get("faithful", False)
                 if not spontaneous_faithful:
                     continue
-                spontaneous_summary = (
-                    answer.get("spontaneous_summary") or answer["summary"]
-                )
-                for item_index, text in enumerate(
-                    spontaneous_summary.get("items", [])
-                ):
+                spontaneous_summary = answer.get("spontaneous_summary") or answer["summary"]
+                for item_index, text in enumerate(spontaneous_summary.get("items", [])):
                     safe_text = redact_pii(str(text))
                     normalized = safe_text.lower()
                     document_id = uuid5(
@@ -680,9 +679,7 @@ class Storage:
 
             survey_id = result.questionnaire.survey_id
             conn.execute(
-                topic_assignments.delete().where(
-                    topic_assignments.c.survey_id == survey_id
-                )
+                topic_assignments.delete().where(topic_assignments.c.survey_id == survey_id)
             )
             for assignment in result.assignments:
                 document = documents[assignment.document_id]
@@ -709,8 +706,7 @@ class Storage:
                             for question in result.questionnaire.questions
                         ],
                         source_topic_ids=[
-                            str(topic_id)
-                            for topic_id in result.questionnaire.source_topic_ids
+                            str(topic_id) for topic_id in result.questionnaire.source_topic_ids
                         ],
                     )
                 )
@@ -790,8 +786,7 @@ class Storage:
             .select_from(
                 interview_sessions.outerjoin(
                     completed_interviews,
-                    interview_sessions.c.interview_id
-                    == completed_interviews.c.interview_id,
+                    interview_sessions.c.interview_id == completed_interviews.c.interview_id,
                 )
             )
             .where(
@@ -835,14 +830,10 @@ class Storage:
                     )
                 )
             conn.execute(
-                completed_interviews.delete().where(
-                    completed_interviews.c.user_id == user_id
-                )
+                completed_interviews.delete().where(completed_interviews.c.user_id == user_id)
             )
             deleted = conn.execute(
-                interview_sessions.delete().where(
-                    interview_sessions.c.user_id == user_id
-                )
+                interview_sessions.delete().where(interview_sessions.c.user_id == user_id)
             ).rowcount
         return int(deleted or 0)
 
@@ -850,9 +841,7 @@ class Storage:
         """Удалить один запуск, не затрагивая прошлые интервью участника."""
         with self.engine.begin() as conn:
             conn.execute(
-                topic_assignments.delete().where(
-                    topic_assignments.c.interview_id == interview_id
-                )
+                topic_assignments.delete().where(topic_assignments.c.interview_id == interview_id)
             )
             conn.execute(
                 completed_interviews.delete().where(
@@ -892,9 +881,7 @@ class Storage:
             if not expired_ids:
                 return 0
             conn.execute(
-                topic_assignments.delete().where(
-                    topic_assignments.c.interview_id.in_(expired_ids)
-                )
+                topic_assignments.delete().where(topic_assignments.c.interview_id.in_(expired_ids))
             )
             conn.execute(
                 completed_interviews.delete().where(

@@ -49,7 +49,7 @@ HALLUCINATION_CASES: list[GoldenCase] = [
         name="stickers_vk_python_hallucination",
         raw_answer=(
             "Стикеры в вк Нет, я имел ввиду то, что раз в несколько месяцев мне "
-            "дарят набор стикеров от сбербанка в социальной сети \"Вконтакте\" Это все"
+            'дарят набор стикеров от сбербанка в социальной сети "Вконтакте" Это все'
         ),
         banned_substrings=["python"],
         expected_concepts=concepts("стикер", "вконтакт|вк"),
@@ -222,7 +222,7 @@ CONTENT_CASES: list[GoldenCase] = [
     GoldenCase(
         name="salary_perks_deposits_investment",
         raw_answer=(
-            "Доступность, наличие \"спасибо\", особые предложения для зарплатных "
+            'Доступность, наличие "спасибо", особые предложения для зарплатных '
             "клиентов. Вклады с хорошим процентом, наличие площадки для "
             "инвестиций. Нет, все хорошо. Спасибо."
         ),
@@ -231,6 +231,4 @@ CONTENT_CASES: list[GoldenCase] = [
     ),
 ]
 
-ALL_CASES: list[GoldenCase] = (
-    HALLUCINATION_CASES + EMPTY_CASES + CONTENT_CASES
-)
+ALL_CASES: list[GoldenCase] = HALLUCINATION_CASES + EMPTY_CASES + CONTENT_CASES

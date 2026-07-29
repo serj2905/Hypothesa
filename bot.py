@@ -150,19 +150,17 @@ async def on_message(message: Message) -> None:
             return
         try:
             async with llm_semaphore:
-                reply, session = await asyncio.to_thread(
-                    advance, session, message.text, generator
-                )
+                reply, session = await asyncio.to_thread(advance, session, message.text, generator)
             if session.declined:
                 # Отказ не оставляет pre-consent запись и не удаляет прошлые интервью.
-                await asyncio.to_thread(
-                    storage.delete_session, user_id, session.interview_id
-                )
+                await asyncio.to_thread(storage.delete_session, user_id, session.interview_id)
             else:
                 await asyncio.to_thread(storage.save_session, user_id, session)
         except ConcurrentSessionUpdate:
             logger.warning("Конкурентное обновление interview_id=%s", session.interview_id)
-            await message.answer("Предыдущий ответ ещё обрабатывается. Отправьте этот ответ ещё раз.")
+            await message.answer(
+                "Предыдущий ответ ещё обрабатывается. Отправьте этот ответ ещё раз."
+            )
             return
         except Exception:
             logger.exception("advance() упал для user_id=%s", user_id)

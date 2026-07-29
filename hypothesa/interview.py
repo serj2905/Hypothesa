@@ -49,12 +49,15 @@ class FollowupTurn(BaseModel):
 
     question: str
     answer: str | None = None
-    reason: Literal[
-        "too_short",
-        "ambiguous",
-        "missing_context",
-        "clarification",
-    ] | None = None
+    reason: (
+        Literal[
+            "too_short",
+            "ambiguous",
+            "missing_context",
+            "clarification",
+        ]
+        | None
+    ) = None
 
 
 class QuestionState(BaseModel):
@@ -115,9 +118,7 @@ class InterviewSession(BaseModel):
         question_id: int | None = None,
         **details: Any,
     ) -> None:
-        self.events.append(
-            InterviewEvent(kind=kind, question_id=question_id, details=details)
-        )
+        self.events.append(InterviewEvent(kind=kind, question_id=question_id, details=details))
 
 
 # Вопросы пилота об обратной связи по Сберу. Для другого сценария передайте
@@ -187,8 +188,7 @@ def start_interview(
         survey_version=survey_version,
         variant=variant,
         questions=[
-            QuestionState(spec=question.model_copy(deep=True))
-            for question in selected_questions
+            QuestionState(spec=question.model_copy(deep=True)) for question in selected_questions
         ],
     )
     session.record_event("session_started")
@@ -324,9 +324,7 @@ def _advance_open(
     elif pending_followup is not None:
         pending_followup.answer = user_message
 
-    parts = [question.initial_answer] + [
-        turn.answer for turn in question.followups if turn.answer
-    ]
+    parts = [question.initial_answer] + [turn.answer for turn in question.followups if turn.answer]
     question.answer = " ".join(part for part in parts if part).strip()
 
     # Для пилота жёстко ограничиваем влияние интервьюера одним уточнением.
@@ -340,8 +338,7 @@ def _advance_open(
             {
                 "role": "user",
                 "content": (
-                    f"<question>{question.spec.text}</question>\n"
-                    f"<answer>{user_message}</answer>"
+                    f"<question>{question.spec.text}</question>\n<answer>{user_message}</answer>"
                 ),
             },
         ],

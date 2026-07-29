@@ -5,12 +5,9 @@
   2. Judge 2 (модель ДРУГОГО семейства) проверяет, что каждый item подтверждается
      исходным ответом. При галлюцинации — один повтор с явным указанием на проблему.
 
-Это закрывает баг 2 (галлюцинации суммаризатора) из CLAUDE.md.
-
 `summarize_session()` — точка входа batch-фазы: вызывается один раз после
-`InterviewSession.finished` (interview.py) и суммаризирует открытые вопросы
-интервью целиком, отдавая готовую запись для сохранения (замена построчной
-сборки results.csv в прототипе).
+`InterviewSession.finished` и суммаризирует открытые вопросы интервью целиком,
+отдавая готовую запись для сохранения.
 """
 
 from __future__ import annotations
@@ -57,7 +54,7 @@ class DraftInterview(BaseModel):
 
 
 class CompletedInterview(BaseModel):
-    """Итоговая запись завершённого интервью — то, что раньше построчно собиралось в results.csv."""
+    """Итоговая запись завершённого интервью для сохранения в PostgreSQL."""
 
     age: int | None
     city: str | None
@@ -123,14 +120,15 @@ _TRAILING_FILLER = re.compile(
 )
 
 
-def _is_stub_answer(raw_answer: str) -> bool:
+def is_stub_answer(raw_answer: str) -> bool:
+    """Проверить, состоит ли ответ только из общих или управляющих реплик."""
     value = _normalize_claim(raw_answer)
     for pattern in _STUB_PATTERNS:
         value = re.sub(pattern, " ", value)
     return not re.sub(r"\s+", "", value)
 
 
-def _prepare_answer_for_prompt(raw_answer: str) -> str:
+def prepare_answer_for_prompt(raw_answer: str) -> str:
     """Убрать только хвостовые управляющие реплики, не меняя исходник для judge."""
     value = re.sub(r"\s+", " ", raw_answer).strip()
     previous = None
@@ -153,8 +151,7 @@ def _validated_verdict(
     for claim in verdict.unsupported_claims:
         normalized_claim = _normalize_claim(claim)
         if normalized_claim and any(
-            normalized_claim in item or item in normalized_claim
-            for item in normalized_items
+            normalized_claim in item or item in normalized_claim for item in normalized_items
         ):
             unsupported.append(claim)
     return FaithfulnessVerdict(
@@ -176,7 +173,7 @@ def generate_open_answer(
     """
     owns_generator = generator is None
     generator = generator or LLMClient(model=config.LLM_MODEL)
-    prompt_answer = _prepare_answer_for_prompt(raw_answer)
+    prompt_answer = prepare_answer_for_prompt(raw_answer)
     messages = [
         {"role": "system", "content": _SUMMARIZE_SYSTEM},
         {"role": "user", "content": f"<answer>{prompt_answer}</answer>"},
@@ -194,7 +191,7 @@ def generate_open_answer(
         )
     try:
         summary = generator.structured(OpenAnswer, messages)
-        if not summary.items and not _is_stub_answer(raw_answer):
+        if not summary.items and not is_stub_answer(raw_answer):
             messages.append(
                 {
                     "role": "user",
@@ -263,10 +260,7 @@ def judge_faithfulness(
     owns_judge = judge is None
     judge = judge or LLMClient(model=config.JUDGE_MODEL)
     try:
-        user = (
-            f"<answer>{raw_answer}</answer>\n"
-            f"<summary_items>{summary.items}</summary_items>"
-        )
+        user = f"<answer>{raw_answer}</answer>\n<summary_items>{summary.items}</summary_items>"
         verdict = judge.structured(
             FaithfulnessVerdict,
             [
@@ -304,9 +298,7 @@ def generate_session_draft(
                 city = question.answer
             else:
                 initial_answer = question.initial_answer or question.answer
-                followup_answers = [
-                    turn.answer for turn in question.followups if turn.answer
-                ]
+                followup_answers = [turn.answer for turn in question.followups if turn.answer]
                 spontaneous_summary = generate_open_answer(
                     initial_answer,
                     generator,
@@ -381,7 +373,9 @@ def summarize_session(
     остаётся суммаризировать только открытые вопросы и прогнать Judge 2.
     """
     if not session.finished:
-        raise ValueError("Суммаризировать можно только завершённое интервью (session.finished=True).")
+        raise ValueError(
+            "Суммаризировать можно только завершённое интервью (session.finished=True)."
+        )
 
     draft = generate_session_draft(session, generator)
     return judge_session_draft(draft, judge)
