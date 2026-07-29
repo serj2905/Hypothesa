@@ -8,16 +8,40 @@ from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import numpy as np
 
 from .interview import DEFAULT_QUESTIONS, QuestionSpec
+from .metrics import wilson_interval
 
 
 class InsufficientDocuments(ValueError):
     """Для устойчивой кластеризации недостаточно документов."""
+
+
+RUSSIAN_TOPIC_STOP_WORDS = frozenset(
+    """
+    а без более больше был была были было быть в вам вас ведь весь во вот все
+    всего всех вы где да даже для до его ее если есть еще же за здесь и из или
+    им их к как ко когда кто ли либо мне может мой моя мое мои мы на над надо
+    наш наша наше наши не него нее нет ни но ну о об однако он она они оно от
+    очень по под при про раз с сам сама сами со так такой также там те тем то
+    того тоже тут ты у уже что чтобы эта эти это я
+    банк банка банке банком сбер сбера сбербанк сбербанка
+    """.split()  # noqa: SIM905 — такой список проще проверять и дополнять.
+)
+
+
+def build_topic_vectorizer():
+    """Создать c-TF-IDF vectorizer без служебных русских и доменных слов."""
+    from sklearn.feature_extraction.text import CountVectorizer
+
+    return CountVectorizer(
+        stop_words=sorted(RUSSIAN_TOPIC_STOP_WORDS),
+        ngram_range=(1, 2),
+    )
 
 
 @dataclass(frozen=True)
@@ -61,6 +85,10 @@ class RegisteredTopic:
     rating: int = 0
     mention_count: int = 0
     active: bool = True
+    # Производные величины: заполняются в calculate_ratings и не хранятся в БД,
+    # потому что однозначно восстанавливаются из mention_count и размера выборки.
+    interview_count: int = 0
+    prevalence_ci95: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -102,9 +130,7 @@ class TopicStore(Protocol):
 
     def next_questionnaire_version(self, survey_id: str) -> int: ...
 
-    def load_latest_questionnaire(
-        self, survey_id: str
-    ) -> QuestionnaireVersion | None: ...
+    def load_latest_questionnaire(self, survey_id: str) -> QuestionnaireVersion | None: ...
 
     def save_topic_cycle(self, result: TopicCycleResult) -> None: ...
 
@@ -119,13 +145,34 @@ class BERTopicBackend:
         random_state: int = 42,
         min_topic_size: int = 5,
         device: str = "cpu",
+        embedding_prefix: str = "",
+        umap_n_neighbors: int = 15,
+        hdbscan_min_samples: int | None = None,
+        cluster_selection_method: Literal["eom", "leaf"] = "eom",
     ) -> None:
         self.embedding_model = embedding_model
         self.random_state = random_state
         self.min_topic_size = min_topic_size
         self.device = device
+        self.embedding_prefix = embedding_prefix
+        self.umap_n_neighbors = umap_n_neighbors
+        self.hdbscan_min_samples = hdbscan_min_samples
+        self.cluster_selection_method = cluster_selection_method
 
-    def fit(self, documents: Sequence[TopicDocument]) -> TopicDiscovery:
+    def encode_documents(self, documents: Sequence[TopicDocument]) -> np.ndarray:
+        """Один раз посчитать нормализованные embeddings для fit или eval-сетки."""
+        from sentence_transformers import SentenceTransformer
+
+        texts = [f"{self.embedding_prefix}{document.text}" for document in documents]
+        encoder = SentenceTransformer(self.embedding_model, device=self.device)
+        return np.asarray(encoder.encode(texts, normalize_embeddings=True, show_progress_bar=False))
+
+    def fit(
+        self,
+        documents: Sequence[TopicDocument],
+        *,
+        embeddings: np.ndarray | None = None,
+    ) -> TopicDiscovery:
         if len(documents) < max(5, self.min_topic_size):
             raise InsufficientDocuments(
                 f"Нужно минимум {max(5, self.min_topic_size)} документов, получено {len(documents)}."
@@ -133,16 +180,16 @@ class BERTopicBackend:
 
         from bertopic import BERTopic
         from hdbscan import HDBSCAN
-        from sentence_transformers import SentenceTransformer
         from sklearn.metrics import silhouette_score
         from umap import UMAP
 
         texts = [document.text for document in documents]
-        encoder = SentenceTransformer(self.embedding_model, device=self.device)
-        embeddings = np.asarray(
-            encoder.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+        embeddings = (
+            self.encode_documents(documents) if embeddings is None else np.asarray(embeddings)
         )
-        n_neighbors = min(15, len(documents) - 1)
+        if embeddings.ndim != 2 or embeddings.shape[0] != len(documents):
+            raise ValueError("Embeddings должны быть матрицей с одной строкой на документ.")
+        n_neighbors = min(self.umap_n_neighbors, len(documents) - 1)
         n_components = min(5, len(documents) - 2)
         umap_model = UMAP(
             n_neighbors=n_neighbors,
@@ -153,14 +200,17 @@ class BERTopicBackend:
         )
         cluster_model = HDBSCAN(
             min_cluster_size=self.min_topic_size,
+            min_samples=self.hdbscan_min_samples,
             metric="euclidean",
-            cluster_selection_method="eom",
+            cluster_selection_method=self.cluster_selection_method,
             prediction_data=True,
         )
         model = BERTopic(
+            language="multilingual",
             embedding_model=None,
             umap_model=umap_model,
             hdbscan_model=cluster_model,
+            vectorizer_model=build_topic_vectorizer(),
             calculate_probabilities=True,
             verbose=False,
         )
@@ -184,7 +234,7 @@ class BERTopicBackend:
         for index, (document, local_id) in enumerate(zip(documents, local_ids, strict=True)):
             probability = None
             if probabilities is not None and local_id != -1:
-                probability = float(np.max(probabilities[index]))
+                probability = float(np.max(np.asarray(probabilities[index])))
             assignments.append(
                 LocalAssignment(
                     document_id=document.document_id,
@@ -199,9 +249,7 @@ class BERTopicBackend:
             mask = np.asarray(local_ids) != -1
             silhouette = float(silhouette_score(embeddings[mask], np.asarray(local_ids)[mask]))
         counts = Counter(local_ids)
-        non_noise_counts = [
-            count for topic, count in counts.most_common() if topic != -1
-        ]
+        non_noise_counts = [count for topic, count in counts.most_common() if topic != -1]
         top_five = sum(non_noise_counts[:5])
         metrics = {
             "noise_ratio": local_ids.count(-1) / len(local_ids),
@@ -239,10 +287,7 @@ def reconcile_topics(
     local_to_stable = {}
 
     for topic in discovered:
-        candidates = [
-            (_cosine(topic.centroid, old.centroid), old)
-            for old in unmatched.values()
-        ]
+        candidates = [(_cosine(topic.centroid, old.centroid), old) for old in unmatched.values()]
         similarity, matched = max(candidates, default=(-1.0, None), key=lambda item: item[0])
         if matched is not None and similarity >= similarity_threshold:
             topic_id = matched.topic_id
@@ -297,14 +342,18 @@ def calculate_ratings(
     min_mentions: int = 2,
     min_prevalence: float = 0.05,
 ) -> list[RegisteredTopic]:
-    """Оценить распространённость темы со сглаживанием без double count."""
+    """Оценить распространённость темы со сглаживанием без double count.
+
+    `rating` — точечная оценка со сглаживанием Лапласа, `prevalence_ci95` —
+    интервал Уилсона по сырой доле упоминаний. Оба говорят об одной величине,
+    но интервал показывает, насколько на этой выборке вообще можно доверять
+    порядку тем: на пилотных n он шире, чем расстояние между соседними темами.
+    """
     if min_mentions < 1:
         raise ValueError("min_mentions должен быть положительным.")
     if not 0 <= min_prevalence <= 1:
         raise ValueError("min_prevalence должен находиться между 0 и 1.")
-    document_to_interview = {
-        document.document_id: document.interview_id for document in documents
-    }
+    document_to_interview = {document.document_id: document.interview_id for document in documents}
     interviews = set(document_to_interview.values())
     mentions: dict[UUID, set[UUID]] = defaultdict(set)
     for assignment in assignments:
@@ -327,10 +376,9 @@ def calculate_ratings(
                 centroid=topic.centroid,
                 rating=rating,
                 mention_count=mention_count,
-                active=(
-                    mention_count >= min_mentions
-                    and prevalence >= min_prevalence
-                ),
+                active=(mention_count >= min_mentions and prevalence >= min_prevalence),
+                interview_count=len(interviews),
+                prevalence_ci95=wilson_interval(mention_count, len(interviews)),
             )
         )
     return rated
@@ -414,12 +462,9 @@ def run_topic_cycle(
     latest_questionnaire = store.load_latest_questionnaire(survey_id)
     questionnaire_changed = (
         latest_questionnaire is None
-        or latest_questionnaire.source_topic_ids
-        != candidate_questionnaire.source_topic_ids
+        or latest_questionnaire.source_topic_ids != candidate_questionnaire.source_topic_ids
     )
-    questionnaire = (
-        candidate_questionnaire if questionnaire_changed else latest_questionnaire
-    )
+    questionnaire = candidate_questionnaire if questionnaire_changed else latest_questionnaire
     completed_at = datetime.now(UTC)
     metrics = dict(discovery.metrics)
     metrics["runtime_seconds"] = (completed_at - started_at).total_seconds()
